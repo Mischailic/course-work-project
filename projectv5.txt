@@ -1,0 +1,116 @@
+#include <iostream>
+#include <vector>
+#include <random>
+#include <iomanip>
+#include <algorithm>
+
+using namespace std;
+
+int main()
+{
+    const int NUM_APTS = 100;            // количество квартир
+    const int NUM_HOURS = 24;            // часов в сутках
+    const int NUM_EXPERIMENTS = 1000;    // число экспериментов
+    const double BASE_LOAD = 0.3;        // кВт на квартиру (постоянно)
+    const double WASH_POWER = 2.0;       // кВт стиральной машины
+    const double OVERLOAD_LIMIT = 100.0; // кВт — предел перегрузки
+
+    // Первый режим: разрешённые часы запуска
+    vector<int> allowed_starts = {18, 19, 20};
+
+    mt19937 rng(42); // фиксированный seed для воспроизводимости
+    uniform_int_distribution<> dist(0, allowed_starts.size() - 1);
+
+    // Накопительные массивы
+    vector<double> sum_power(NUM_HOURS, 0.0);
+    double sum_max_power = 0.0;
+    double sum_overload_hours = 0.0;
+    int days_with_overload = 0;
+    double total_energy = 0.0;
+
+    for (int exp = 0; exp < NUM_EXPERIMENTS; ++exp)
+    {
+        vector<double> hourly_power(NUM_HOURS, 0.0);
+
+        // Базовая нагрузка от всех квартир (постоянно)
+        for (int h = 0; h < NUM_HOURS; ++h)
+        {
+            hourly_power[h] = NUM_APTS * BASE_LOAD; // 30 кВт
+        }
+
+        // Для каждой квартиры случайно выбираем час запуска
+        for (int apt = 0; apt < NUM_APTS; ++apt)
+        {
+            int start_hour = allowed_starts[dist(rng)];
+            // Машина работает 2 часа: start_hour и start_hour+1
+            hourly_power[start_hour] += WASH_POWER;
+            hourly_power[start_hour + 1] += WASH_POWER;
+        }
+
+        // Находим максимум за сутки
+        double max_power = *max_element(hourly_power.begin(), hourly_power.end());
+
+        // Считаем часы перегрузки
+        int overload_hours = 0;
+        for (int h = 0; h < NUM_HOURS; ++h)
+        {
+            sum_power[h] += hourly_power[h];
+            if (hourly_power[h] > OVERLOAD_LIMIT)
+            {
+                overload_hours++;
+            }
+        }
+
+        sum_max_power += max_power;
+        sum_overload_hours += overload_hours;
+        if (overload_hours > 0)
+            days_with_overload++;
+
+        // Общее суточное потребление (кВтч) = сумма мощностей по всем часам
+        for (int h = 0; h < NUM_HOURS; ++h)
+        {
+            total_energy += hourly_power[h];
+        }
+    }
+
+    // Вывод результатов
+    cout << "=== MODE 1: Start at 18:00, 19:00, or 20:00 ===" << endl;
+    cout << "Number of experiments: " << NUM_EXPERIMENTS << endl;
+    cout << endl;
+
+    cout << "Average power by hour (kW):" << endl;
+    cout << setw(6) << "Hour" << setw(15) << "Power (kW)" << endl;
+    cout << string(21, '-') << endl;
+    for (int h = 0; h < NUM_HOURS; ++h)
+    {
+        double avg = sum_power[h] / NUM_EXPERIMENTS;
+        string mark = (avg > OVERLOAD_LIMIT) ? " *** OVERLOAD" : "";
+        cout << setw(6) << h << setw(15) << fixed << setprecision(2) << avg << mark << endl;
+    }
+
+    cout << endl;
+    cout << "Average maximum power per day: "
+         << fixed << setprecision(2) << sum_max_power / NUM_EXPERIMENTS << " kW" << endl;
+
+    cout << "Average number of overload hours per day: "
+         << fixed << setprecision(2) << sum_overload_hours / NUM_EXPERIMENTS << endl;
+
+    double overload_percent = (double)days_with_overload / NUM_EXPERIMENTS * 100.0;
+    cout << "Percentage of days with overload: "
+         << fixed << setprecision(1) << overload_percent << "%" << endl;
+
+    double avg_daily_energy = total_energy / NUM_EXPERIMENTS;
+    cout << "Average daily energy consumption: "
+         << fixed << setprecision(1) << avg_daily_energy << " kWh" << endl;
+
+    // Проверка: расчёт мощности при одновременной работе
+    cout << endl;
+    cout << "=== Power Calculation Verification ===" << endl;
+    cout << "Base load (100 apartments x 0.3 kW): "
+         << NUM_APTS * BASE_LOAD << " kW" << endl;
+    cout << "One machine: " << NUM_APTS * BASE_LOAD + WASH_POWER << " kW" << endl;
+    cout << "Ten machines: " << NUM_APTS * BASE_LOAD + 10 * WASH_POWER << " kW" << endl;
+    cout << "Overload limit: " << OVERLOAD_LIMIT << " kW" << endl;
+
+    return 0;
+}
